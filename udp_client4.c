@@ -10,11 +10,12 @@ void tv_sub(struct  timeval *out, struct timeval *in);	    //calcu the time inte
 
 int main(int argc, char *argv[])
 {
-	int len, sockfd;
+	// length of message, socket object
+  int len, sockfd;
 	struct sockaddr_in ser_addr;
-	char **pptr;
+	char **pptr; // array of strings
 	struct hostent *sh;
-	struct in_addr **addrs;
+	struct in_addr **addrs; // address list (array of addresses)
 	FILE *fp;
 
 	if (argc!= 2)
@@ -27,16 +28,20 @@ int main(int argc, char *argv[])
 		printf("error when gethostbyname");
 		exit(0);
 	}
-
+  
+  // AF_INET: Internet address
+  // SOCK_DGRAM: datagram, connectionless-mode, unreliable
+  // 0: Default UDP
 	sockfd = socket(AF_INET, SOCK_DGRAM, 0);             //create socket
 	if (sockfd<0)
 	{
 		printf("error in socket");
 		exit(1);
 	}
-
+  
+  // get address list from host
 	addrs = (struct in_addr **)sh->h_addr_list;
-	printf("canonical name: %s\n", sh->h_name);
+	printf("canonical name: %s\n", sh->h_name); // host name
 	for (pptr=sh->h_aliases; *pptr != NULL; pptr++)
 		printf("the aliases name is: %s\n", *pptr);			//printf socket information
 	switch(sh->h_addrtype)
@@ -50,7 +55,8 @@ int main(int argc, char *argv[])
 	}
 
 	ser_addr.sin_family = AF_INET;
-	ser_addr.sin_port = htons(MYUDP_PORT);
+	ser_addr.sin_port = htons(MYUDP_PORT); // host byte order to network byte order
+  // copy address list from host into sockaddr struct
 	memcpy(&(ser_addr.sin_addr.s_addr), *addrs, sizeof(struct in_addr));
 	bzero(&(ser_addr.sin_zero), 8);
 
@@ -68,18 +74,18 @@ int main(int argc, char *argv[])
 
 void str_cli1(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, int *len)
 {
-	char *buf;
-	long lsize, ci;
-	char sends[3*DATALEN];
-	struct ack_so ack;
-	int n, slen;
+	char *buf; // buffer
+	long lsize, ci; // size of file, current index
+	char sends[DATALEN]; // string that is sent
+	struct ack_so ack; // to receive ACK
+	int n, slen; // num bytes sent, num bytes in message 
 	float time_inv = 0.0;
-	struct timeval sendt, recvt;
+	struct timeval sendt, recvt; // to calculate time
 	ci = 0;
 	int cdu = 1, cp = 0; // current DU size, current packet #
 
 	fseek (fp , 0 , SEEK_END);
-	lsize = ftell (fp);
+	lsize = ftell (fp); // get size of file
 	rewind (fp);
 	printf("The file length is %d bytes\n", (int)lsize);
 	printf("the packet length is %d bytes\n",DATALEN);
@@ -88,28 +94,32 @@ void str_cli1(FILE *fp, int sockfd, struct sockaddr *addr, int addrlen, int *len
 	buf = (char *) malloc (lsize);
 	if (buf == NULL) exit (2);
 
-  	// copy the file into the buffer.
+  // copy the file into the buffer.
 	fread (buf,1,lsize,fp);
 
-  	/*** the whole file is loaded in the buffer. ***/
+  /*** the whole file is loaded in the buffer. ***/
 	buf[lsize] ='\0';									//append the end byte
 	gettimeofday(&sendt, NULL);							//get the current time
 	
+  // copy entire file, keep track using index
 	while(ci<= lsize)
 	{
+    // send DATALEN if enough data left, otherwise just sent the rest of data
 		if ((lsize+1-ci) <= DATALEN)
 			slen = lsize+1-ci;
 		else 
 			slen = DATALEN;
+    // copy slen bytes from buffer into string to be sent
 		memcpy(sends, (buf+ci), slen);
 		
+    // n: num bytes sent
 		n = sendto(sockfd, &sends, slen, 0, addr, addrlen);
 		
 		if(n == -1) {
 			printf("send error!");								//send the data
 			exit(1);
 		}
-		ci += slen;
+		ci += slen; // update current index to after slen bytes sent
 		
 		// Get ACK only if no. of DU match packet no.
 		cp++;
